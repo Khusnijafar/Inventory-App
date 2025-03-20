@@ -1,5 +1,6 @@
 package com.example.inventoryapptest.ui.main
 
+import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
@@ -12,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,10 +25,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
 import com.example.inventoryapptest.data.model.Item
+import com.example.inventoryapptest.ui.login.LoginActivity
 
 class MainActivity : ComponentActivity() {
     private lateinit var viewModel: MainViewModel
     private var apiToken: String? = null
+    private var showExitDialog by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,6 +69,18 @@ class MainActivity : ComponentActivity() {
             finish()
         }
     }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (!showExitDialog) {
+            showExitDialog = true
+            setContent {
+                MaterialTheme {
+                    MainScreen(viewModel, apiToken!!)
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,6 +90,8 @@ fun MainScreen(viewModel: MainViewModel, apiToken: String) {
     var showAddDialog by remember { mutableStateOf(false) }
     var showEditDialog by remember { mutableStateOf<Item?>(null) }
     var showDeleteDialog by remember { mutableStateOf<Item?>(null) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+    var showExitDialog by remember { mutableStateOf(false) }
     val isLoading by viewModel.isLoading.collectAsState()
 
     Scaffold(
@@ -81,7 +99,7 @@ fun MainScreen(viewModel: MainViewModel, apiToken: String) {
             TopAppBar(
                 title = { Text("Inventory") },
                 navigationIcon = {
-                    IconButton(onClick = { (context as? ComponentActivity)?.finish() }) {
+                    IconButton(onClick = { showLogoutDialog = true }) {
                         Icon(Icons.Default.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -114,8 +132,8 @@ fun MainScreen(viewModel: MainViewModel, apiToken: String) {
                 items(items) { item ->
                     ItemCard(
                         item = item,
-                        onItemClick = { showEditDialog = item },
-                        onItemLongClick = { showDeleteDialog = item }
+                        onEditClick = { showEditDialog = item },
+                        onDeleteClick = { showDeleteDialog = item }
                     )
                 }
             }
@@ -190,6 +208,57 @@ fun MainScreen(viewModel: MainViewModel, apiToken: String) {
                 }
             )
         }
+
+        // Logout Confirmation Dialog
+        if (showLogoutDialog) {
+            AlertDialog(
+                onDismissRequest = { showLogoutDialog = false },
+                title = { Text("Logout") },
+                text = { Text("Are you sure you want to logout?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showLogoutDialog = false
+                            // Navigate to login screen
+                            val intent = Intent(context, LoginActivity::class.java)
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                            context.startActivity(intent)
+                        }
+                    ) {
+                        Text("Logout")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showLogoutDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        // Exit Confirmation Dialog
+        if (showExitDialog) {
+            AlertDialog(
+                onDismissRequest = { showExitDialog = false },
+                title = { Text("Exit App") },
+                text = { Text("Are you sure you want to exit?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            showExitDialog = false
+                            (context as? ComponentActivity)?.finish()
+                        }
+                    ) {
+                        Text("Exit")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showExitDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
 
     // Error handling
@@ -204,35 +273,63 @@ fun MainScreen(viewModel: MainViewModel, apiToken: String) {
 @Composable
 fun ItemCard(
     item: Item,
-    onItemClick: () -> Unit,
-    onItemLongClick: () -> Unit
+    onEditClick: () -> Unit,
+    onDeleteClick: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+    
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onItemClick)
-            .pointerInteropFilter { event ->
-                if (event.action == android.view.MotionEvent.ACTION_DOWN) {
-                    onItemLongClick()
-                    true
-                }
-                false
-            }
     ) {
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp)
         ) {
-            Text(
-                text = item.item_name,
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Stock: ${item.stock} ${item.unit}",
-                style = MaterialTheme.typography.bodyMedium
-            )
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = item.item_name,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Stock: ${item.stock} ${item.unit}",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            
+            IconButton(
+                onClick = { showMenu = true },
+                modifier = Modifier.align(Alignment.TopEnd)
+            ) {
+                Icon(
+                    Icons.Default.MoreVert,
+                    contentDescription = "More options"
+                )
+            }
+            
+            DropdownMenu(
+                expanded = showMenu,
+                onDismissRequest = { showMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Edit") },
+                    onClick = {
+                        showMenu = false
+                        onEditClick()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("Delete") },
+                    onClick = {
+                        showMenu = false
+                        onDeleteClick()
+                    }
+                )
+            }
         }
     }
 }
